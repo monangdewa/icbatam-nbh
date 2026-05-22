@@ -2,21 +2,29 @@ import streamlit as st
 import pandas as pd
 
 # ==========================================
-# 1. KONFIGURASI HALAMAN & SEMBUNYIKAN GITHUB
+# 1. KONFIGURASI HALAMAN & SEMBUNYIKAN GITHUB (PERBAIKAN CSS COCOK UNTUK SEMUA VERSI)
 # ==========================================
 st.set_page_config(page_title="MTP Dashboard System", layout="wide")
 
-# Kode CSS di bawah ini untuk menghilangkan ikon GitHub dan menu atas
+# Menyembunyikan seluruh elemen toolbar pojok kanan atas secara paksa
 st.markdown(
     """
     <style>
-    /* Menyembunyikan tombol deploy dan ikon GitHub di kanan atas */
-    .stAppDeployButton {
+    /* Sembunyikan ikon GitHub, Share, dan tombol deploy */
+    .stAppDeployButton, [data-testid="stActionButton"], .st-emotion-cache-1lb4g6g, .st-emotion-cache-12w0qpk {
         display: none !important;
     }
-    /* Menyembunyikan footer bawaan Streamlit */
+    /* Sembunyikan menu titik tiga bawaan jika ingin benar-benar bersih */
+    #MainMenu, [data-testid="stIconMaterial"] {
+        visibility: hidden !important;
+    }
+    /* Sembunyikan footer */
     footer {
-        visibility: hidden;
+        visibility: hidden !important;
+    }
+    /* Menghilangkan ruang kosong di atas setelah ikon disembunyikan */
+    .stAppHeader {
+        background-color: rgba(0, 0, 0, 0);
     }
     </style>
     """,
@@ -116,7 +124,7 @@ else:
                 nama_kolom_toko = st.session_state.uploaded_data.columns[0]
                 list_toko = sorted(st.session_state.uploaded_data[nama_kolom_toko].dropna().unique().tolist())
                 toko_terpilih = st.multiselect("Pilih Toko yang Ingin Ditampilkan:", options=list_toko, default=list_toko)
-                df_filtered = st.session_state.uploaded_data[st.session_state.uploaded_data[nama_kolom_toko].isin(toko_terpilled)] if 'toko_terpilled' in locals() else st.session_state.uploaded_data[st.session_state.uploaded_data[nama_kolom_toko].isin(toko_terpilih)]
+                df_filtered = st.session_state.uploaded_data[st.session_state.uploaded_data[nama_kolom_toko].isin(toko_terpilih)]
                 st.dataframe(df_filtered, use_container_width=True)
             else:
                 st.info("Belum ada data CSV yang diupload.")
@@ -216,4 +224,15 @@ else:
             else:
                 st.info("Belum ada data NBH utama dari Admin.")
                 
-            st
+            st.write("---")
+            st.subheader("Status Foto dari IC")
+            if st.session_state.ic_uploads:
+                toko_view = [{"NBH": x["nbh"], "Status Dokumen": x["status"]} for x in st.session_state.ic_uploads]
+                st.table(toko_view)
+            else:
+                st.info("Belum ada update bukti fisik dari IC.")
+                
+        with tab2:
+            st.header("Bukti Chat")
+            st.info("Fitur tampilan bukti chat toko.")
+            st.text_area("Catatan/Pesan Toko ke Tim IC", placeholder="Tulis pesan di sini...")
