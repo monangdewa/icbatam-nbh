@@ -1,40 +1,62 @@
 import streamlit as st
 import pandas as pd
 
-# Konfigurasi Halaman
+# ==========================================
+# 1. KONFIGURASI HALAMAN & SEMBUNYIKAN GITHUB
+# ==========================================
 st.set_page_config(page_title="MTP Dashboard System", layout="wide")
 
-# 1. DATABASE KREDENSIAL
+# Kode CSS di bawah ini untuk menghilangkan ikon GitHub dan menu atas
+st.markdown(
+    """
+    <style>
+    /* Menyembunyikan tombol deploy dan ikon GitHub di kanan atas */
+    .stAppDeployButton {
+        display: none !important;
+    }
+    /* Menyembunyikan footer bawaan Streamlit */
+    footer {
+        visibility: hidden;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# ==========================================
+# 2. DATABASE KREDENSIAL
+# ==========================================
 CREDENTIALS = {
     "Admin": {"user": "MTP", "pwd": "1712"},
     "IC Upload": {"user": "ICBTM", "pwd": "@ICBTM"},
     "Toko": {"user": "BTMJUARA", "pwd": "BTMJUARA"}
 }
 
-# 2. INISIALISASI SESSION STATE (Penyimpanan Data Sementara)
+# ==========================================
+# 3. INISIALISASI SESSION STATE
+# ==========================================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "role" not in st.session_state:
     st.session_state.role = None
 if "uploaded_data" not in st.session_state:
-    st.session_state.uploaded_data = None  # Menyimpan dataframe CSV
+    st.session_state.uploaded_data = None  
 if "ic_uploads" not in st.session_state:
-    st.session_state.ic_uploads = []  # Menyimpan data bukti foto dari IC
+    st.session_state.ic_uploads = []  
 
-# 3. FUNGSI LOGOUT
+# Fungsi Logout
 def logout():
     st.session_state.logged_in = False
     st.session_state.role = None
     st.rerun()
 
 # ==========================================
-# HALAMAN LOGIN
+# 4. HALAMAN LOGIN
 # ==========================================
 if not st.session_state.logged_in:
     st.title("🔒 MTP System Login")
     st.subheader("Silakan pilih jenis login dan masukkan akun Anda")
     
-    # Form Login
     role_choice = st.selectbox("Jenis Login", ["Admin", "IC Upload", "Toko"])
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
@@ -50,10 +72,10 @@ if not st.session_state.logged_in:
             st.error("Username atau Password salah. Silakan coba lagi.")
 
 # ==========================================
-# HALAMAN DASHBOARD (JIKA SUDAH LOGIN)
+# 5. HALAMAN DASHBOARD (JIKA SUDAH LOGIN)
 # ==========================================
 else:
-    # Sidebar untuk Navigasi & Logout
+    # Sidebar Navigasi
     st.sidebar.title(f"👤 {st.session_state.role}")
     st.sidebar.write("Selamat Datang!")
     if st.sidebar.button("Log Out", type="secondary"):
@@ -67,50 +89,34 @@ else:
         
         with tab1:
             st.header("Upload Data CSV")
-            
-            # Pilihan hapus data sebelumnya
             delete_previous = st.radio("Hapus data sebelumnya sebelum upload baru?", ("Tidak", "YA"))
-            
             uploaded_file = st.file_uploader("Pilih file CSV", type=["csv"])
             
             if uploaded_file is not None:
                 if st.button("Proses File CSV"):
                     try:
-                        # Menggunakan sep='|' karena file CSV menggunakan pemisah tanda pipa
                         df = pd.read_csv(uploaded_file, sep='|')
-                        
                         if delete_previous == "YA":
                             st.session_state.uploaded_data = df
                             st.warning("Data sebelumnya telah dihapus dan digantikan data baru.")
                         else:
                             if st.session_state.uploaded_data is not None:
                                 st.session_state.uploaded_data = pd.concat([st.session_state.uploaded_data, df], ignore_index=True)
-                                st.success("Data baru berhasil ditambahkan ke data lama.")
+                                st.success("Data baru berhasil ditambahkan.")
                             else:
                                 st.session_state.uploaded_data = df
                                 st.success("Data berhasil diupload.")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Gagal membaca file. Pastikan format benar. Error: {e}")
+                        st.error(f"Gagal membaca file. Error: {e}")
             
-            # Menampilkan data CSV yang ada dengan Fitur Filter Toko
             if st.session_state.uploaded_data is not None:
                 st.write("---")
                 st.subheader("🔍 Filter & Tampilkan Data Saat Ini")
-                
-                # Mengambil nama kolom pertama secara otomatis (kolom TOKO)
                 nama_kolom_toko = st.session_state.uploaded_data.columns[0]
-                
-                # Mengambil daftar kode toko yang unik untuk dijadikan pilihan filter
                 list_toko = sorted(st.session_state.uploaded_data[nama_kolom_toko].dropna().unique().tolist())
-                
-                # Input Filter Multi-select untuk Admin
                 toko_terpilih = st.multiselect("Pilih Toko yang Ingin Ditampilkan:", options=list_toko, default=list_toko)
-                
-                # Menyaring data berdasarkan toko yang dipilih
-                df_filtered = st.session_state.uploaded_data[st.session_state.uploaded_data[nama_kolom_toko].isin(toko_terpilih)]
-                
-                # Menampilkan tabel hasil filter
+                df_filtered = st.session_state.uploaded_data[st.session_state.uploaded_data[nama_kolom_toko].isin(toko_terpilled)] if 'toko_terpilled' in locals() else st.session_state.uploaded_data[st.session_state.uploaded_data[nama_kolom_toko].isin(toko_terpilih)]
                 st.dataframe(df_filtered, use_container_width=True)
             else:
                 st.info("Belum ada data CSV yang diupload.")
@@ -124,30 +130,25 @@ else:
                     with st.container(border=True):
                         col1, col2 = st.columns([2, 1])
                         with col1:
-                            st.write(f"**NBH:** {item['nbh']}")
-                            st.write(f"**Status:** {item['status']}")
-                            st.image(item['image'], caption=f"Foto untuk NBH: {item['nbh']}", width=300)
+                            st.write(f"**NBH:** {item['nbh']} | **Status:** {item['status']}")
+                            st.image(item['image'], width=300)
                         with col2:
                             new_nbh = st.text_input(f"Edit NBH ({idx})", value=item['nbh'], key=f"admin_edit_{idx}")
                             if st.button(f"Simpan Perubahan ({idx})", key=f"admin_save_{idx}"):
                                 st.session_state.ic_uploads[idx]['nbh'] = new_nbh
-                                st.success("Data NBH berhasil diperbarui!")
+                                st.success("Data NBH diperbarui!")
                                 st.rerun()
-                                
                             if st.button(f"Hapus Foto ({idx})", key=f"admin_del_{idx}"):
                                 st.session_state.ic_uploads.pop(idx)
-                                st.error("Foto berhasil dihapus.")
+                                st.error("Foto dihapus.")
                                 st.rerun()
 
     # --- DASHBOARD IC UPLOAD ---
     elif st.session_state.role == "IC Upload":
         st.title("📤 Dashboard IC Upload")
-        
         st.subheader("Input Bukti Kerja")
         
-        # Mengecek apakah data CSV sudah ada untuk mengambil NBH secara otomatis
         if st.session_state.uploaded_data is not None:
-            # Mencari kolom NBH atau menggunakan kolom indeks ke-1 jika nama kolom persisnya berbeda
             kolom_nbh = [col for col in st.session_state.uploaded_data.columns if 'NBH' in col]
             if kolom_nbh:
                 nbh_options = st.session_state.uploaded_data[kolom_nbh[0]].dropna().unique().tolist()
@@ -155,13 +156,12 @@ else:
             else:
                 nbh_choice = st.text_input("Masukkan NBH (Ketik Manual)")
         else:
-            nbh_choice = st.text_input("Masukkan NBH (Ketik Manual karena CSV Admin Kosong)")
+            nbh_choice = st.text_input("Masukkan NBH (Ketik Manual)")
             
         img_file = st.file_uploader("Upload Bukti Foto", type=["jpg", "jpeg", "png"])
         
         if st.button("Submit Upload", type="primary"):
             if nbh_choice and img_file:
-                # Simpan data ke session state dengan primary status "Selesai"
                 st.session_state.ic_uploads.append({
                     "nbh": str(nbh_choice),
                     "image": img_file,
@@ -170,9 +170,8 @@ else:
                 st.success("Bukti berhasil diupload dengan status: Selesai!")
                 st.rerun()
             else:
-                st.error("Mohon isi NBH dan upload foto terlebih dahulu.")
+                st.error("Mohon isi NBH dan upload foto.")
                 
-        # Kelola foto yang sudah diupload oleh IC sendiri
         st.write("---")
         st.subheader("Riwayat Upload Anda")
         if not st.session_state.ic_uploads:
@@ -199,38 +198,22 @@ else:
     elif st.session_state.role == "Toko":
         st.title("🏪 Dashboard Toko")
         
-        # Fitur Input Mandiri untuk Toko memasukkan Kodenya sendiri
         st.subheader("Pengaturan Akses Toko")
-        kode_toko_anda = st.text_input("Masukkan Kode Toko Anda untuk Filter Data (Contoh: TWSU, T2SU, TAPK):", value="TWSU").strip().upper()
+        kode_toko_anda = st.text_input("Masukkan Kode Toko Anda untuk Filter Data (Contoh: TWSU, T2SU):", value="TWSU").strip().upper()
         
         tab1, tab2 = st.tabs(["📊 Data NBH", "💬 Bukti Chat"])
         
         with tab1:
             st.header(f"Melihat Data NBH - Toko {kode_toko_anda}")
-            
             if st.session_state.uploaded_data is not None:
                 nama_kolom_toko = st.session_state.uploaded_data.columns[0]
-                
-                # Memfilter data utama: Hanya menampilkan baris yang kolom TOKO-nya cocok dengan input toko
                 data_toko_ini = st.session_state.uploaded_data[st.session_state.uploaded_data[nama_kolom_toko].astype(str).str.strip().str.upper() == kode_toko_anda]
                 
                 if not data_toko_ini.empty:
                     st.dataframe(data_toko_ini, use_container_width=True)
                 else:
-                    st.warning(f"Tidak ada data NBH yang ditemukan di CSV untuk kode toko '{kode_toko_anda}'.")
+                    st.warning(f"Tidak ada data NBH untuk kode toko '{kode_toko_anda}'.")
             else:
                 st.info("Belum ada data NBH utama dari Admin.")
                 
-            st.write("---")
-            st.subheader("Status Foto dari IC")
-            if st.session_state.ic_uploads:
-                # Menampilkan status dokumen IC yang ada
-                toko_view = [{"NBH": x["nbh"], "Status Dokumen": x["status"]} for x in st.session_state.ic_uploads]
-                st.table(toko_view)
-            else:
-                st.info("Belum ada update bukti fisik dari IC.")
-                
-        with tab2:
-            st.header("Bukti Chat")
-            st.info("Fitur tampilan bukti chat toko.")
-            st.text_area("Catatan/Pesan Toko ke Tim IC", placeholder="Tulis pesan atau pantau log chat di sini...")
+            st
