@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import uuid
 
-st.set_page_config(page_title="IC Batam NBH Control System", layout="wide")
+st.set_page_config(page_title="IC Batam NBH System", layout="wide")
 
-st.title("📊 IC Batam - NBH Control System")
+st.title("📊 IC Batam - NBH Control System (Anti Fraud)")
 
 # =========================
 # UPLOAD CSV
@@ -15,8 +15,7 @@ file = st.sidebar.file_uploader("Upload file CSV", type=["csv"])
 
 if file is not None:
 
-    df = pd.read_csv(file, sep=None, engine="python", encoding="utf-8")
-    df.columns = df.columns.str.strip()
+    df = pd.read_csv(file)
 
     st.success("✅ File berhasil diupload")
 
