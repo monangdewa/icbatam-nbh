@@ -26,12 +26,7 @@ if file is not None:
     # =========================
     # CLEAN COLUMN (STABIL)
     # =========================
-    df.columns = (
-        df.columns
-        .str.strip()
-        .str.upper()
-        .str.replace(" ", "_")
-    )
+    df = pd.read_csv(file, sep="|")
 
     st.write("📌 COLUMNS DETECTED:", df.columns.tolist())
     st.write("📌 TOTAL COLUMNS:", len(df.columns))
