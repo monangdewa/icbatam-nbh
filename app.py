@@ -15,20 +15,33 @@ file = st.sidebar.file_uploader("Upload file CSV", type=["csv"])
 
 if file is not None:
 
-    df = pd.read_csv(file, sep="|")
+    # =========================
+    # LOAD CSV (PIPE DELIMITER FIX)
+    # =========================
+    df = pd.read_csv(file, sep="|", engine="python")
 
     # =========================
-    # CLEAN COLUMN (STABIL)
+    # AUTO FIX IF STILL 1 COLUMN (ANTI HP / EXCEL ISSUE)
     # =========================
-    df = pd.read_csv(file, sep="|")
+    if len(df.columns) == 1:
+        df = df.iloc[:, 0].str.split("|", expand=True)
 
+        df.columns = [
+            "TOKO", "NO_NRB", "TGL_NRB", "NO_BA", "TGL_BA",
+            "PLUIDM", "PLUIGR", "NAMA_BARANG", "KET_RETUR",
+            "QTY_FISIK_KURANG", "RPH_FISIK_KURANG"
+        ]
+
+    # =========================
+    # DEBUG INFO
+    # =========================
     st.write("📌 COLUMNS DETECTED:", df.columns.tolist())
     st.write("📌 TOTAL COLUMNS:", len(df.columns))
 
     st.success("✅ File berhasil diupload")
 
     # =========================
-    # SAFETY CHECK (ANTI ERROR)
+    # SAFETY CHECK
     # =========================
     required_cols = ["TOKO", "NO_NRB", "TGL_NRB"]
 
@@ -47,12 +60,12 @@ if file is not None:
     ).dt.strftime("%Y-%m-%d")
 
     # =========================
-    # CREATE SYSTEM_ID
+    # SYSTEM ID
     # =========================
     df["SYSTEM_ID"] = [str(uuid.uuid4()) for _ in range(len(df))]
 
     # =========================
-    # CREATE CASE_ID (KEY LOGIC)
+    # CASE ID
     # =========================
     df["CASE_ID"] = (
         df["TOKO"].astype(str) + "_" +
@@ -61,7 +74,7 @@ if file is not None:
     )
 
     # =========================
-    # SHOW DATA CLEAN
+    # DATA VIEW
     # =========================
     st.subheader("📌 Data NBH (Clean & Ready System)")
     st.dataframe(df, use_container_width=True)
@@ -91,13 +104,19 @@ if file is not None:
     filtered = df.copy()
 
     if toko:
-        filtered = filtered[filtered["TOKO"].astype(str).str.contains(toko, case=False, na=False)]
+        filtered = filtered[
+            filtered["TOKO"].astype(str).str.contains(toko, case=False, na=False)
+        ]
 
     if nrb:
-        filtered = filtered[filtered["NO_NRB"].astype(str).str.contains(nrb, case=False, na=False)]
+        filtered = filtered[
+            filtered["NO_NRB"].astype(str).str.contains(nrb, case=False, na=False)
+        ]
 
     if case:
-        filtered = filtered[filtered["CASE_ID"].astype(str).str.contains(case, case=False, na=False)]
+        filtered = filtered[
+            filtered["CASE_ID"].astype(str).str.contains(case, case=False, na=False)
+        ]
 
     st.dataframe(filtered, use_container_width=True)
 
