@@ -4,9 +4,9 @@ import sqlite3
 import uuid
 from datetime import datetime
 
-st.set_page_config(page_title="IC Batam NBH ERP", layout="wide")
+st.set_page_config(page_title="IC Batam - NBH TOKO", layout="wide")
 
-st.title("🔥 IC Batam - NBH Anti Fraud ERP System")
+st.title("🔥 IC Batam - NBH TOKO")
 
 # =========================
 # DATABASE
@@ -49,7 +49,7 @@ conn.commit()
 # =========================
 role = st.sidebar.selectbox(
     "Login Role",
-    ["Admin IC", "Tim Upload IC", "Toko"]
+    ["Admin IC", "Upload Bukti Chat", "Toko"]
 )
 
 st.sidebar.divider()
@@ -124,7 +124,7 @@ if role == "Admin IC":
 # =========================
 # TIM UPLOAD IC
 # =========================
-elif role == "Tim Upload IC":
+elif role == "Upload Bukti Chat":
 
     st.subheader("📷 Upload Bukti Follow Up")
 
