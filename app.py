@@ -4,7 +4,7 @@ import pandas as pd
 # Konfigurasi Halaman
 st.set_page_config(page_title="MTP Dashboard System", layout="wide")
 
-# 1. DATABASE KREDENSIAL (Sesuai Permintaan)
+# 1. DATABASE KREDENSIAL
 CREDENTIALS = {
     "Admin": {"user": "MTP", "pwd": "1712"},
     "IC Upload": {"user": "ICBTM", "pwd": "@ICBTM"},
@@ -17,9 +17,9 @@ if "logged_in" not in st.session_state:
 if "role" not in st.session_state:
     st.session_state.role = None
 if "uploaded_data" not in st.session_state:
-    st.session_state.uploaded_data = None  # Untuk menyimpan data CSV Admin
+    st.session_state.uploaded_data = None  # Menyimpan dataframe CSV
 if "ic_uploads" not in st.session_state:
-    st.session_state.ic_uploads = []  # Untuk menyimpan data bukti foto dari IC
+    st.session_state.ic_uploads = []  # Menyimpan data bukti foto dari IC
 
 # 3. FUNGSI LOGOUT
 def logout():
@@ -75,23 +75,43 @@ else:
             
             if uploaded_file is not None:
                 if st.button("Proses File CSV"):
-                    df = pd.read_csv(uploaded_file)
-                    
-                    if delete_previous == "YA":
-                        st.session_state.uploaded_data = df
-                        st.warning("Data sebelumnya telah dihapus dan digantikan data baru.")
-                    else:
-                        if st.session_state.uploaded_data is not None:
-                            st.session_state.uploaded_data = pd.concat([st.session_state.uploaded_data, df], ignore_index=True)
-                            st.success("Data baru berhasil ditambahkan ke data lama.")
-                        else:
+                    try:
+                        # Menggunakan sep='|' karena file CSV menggunakan pemisah tanda pipa
+                        df = pd.read_csv(uploaded_file, sep='|')
+                        
+                        if delete_previous == "YA":
                             st.session_state.uploaded_data = df
-                            st.success("Data berhasil diupload.")
+                            st.warning("Data sebelumnya telah dihapus dan digantikan data baru.")
+                        else:
+                            if st.session_state.uploaded_data is not None:
+                                st.session_state.uploaded_data = pd.concat([st.session_state.uploaded_data, df], ignore_index=True)
+                                st.success("Data baru berhasil ditambahkan ke data lama.")
+                            else:
+                                st.session_state.uploaded_data = df
+                                st.success("Data berhasil diupload.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Gagal membaca file. Pastikan format benar. Error: {e}")
             
-            # Menampilkan data CSV yang ada
+            # Menampilkan data CSV yang ada dengan Fitur Filter Toko
             if st.session_state.uploaded_data is not None:
-                st.subheader("Data Saat Ini")
-                st.dataframe(st.session_state.uploaded_data)
+                st.write("---")
+                st.subheader("🔍 Filter & Tampilkan Data Saat Ini")
+                
+                # Mengambil nama kolom pertama secara otomatis (kolom TOKO)
+                nama_kolom_toko = st.session_state.uploaded_data.columns[0]
+                
+                # Mengambil daftar kode toko yang unik untuk dijadikan pilihan filter
+                list_toko = sorted(st.session_state.uploaded_data[nama_kolom_toko].dropna().unique().tolist())
+                
+                # Input Filter Multi-select untuk Admin
+                toko_terpilih = st.multiselect("Pilih Toko yang Ingin Ditampilkan:", options=list_toko, default=list_toko)
+                
+                # Menyaring data berdasarkan toko yang dipilih
+                df_filtered = st.session_state.uploaded_data[st.session_state.uploaded_data[nama_kolom_toko].isin(toko_terpilih)]
+                
+                # Menampilkan tabel hasil filter
+                st.dataframe(df_filtered, use_container_width=True)
             else:
                 st.info("Belum ada data CSV yang diupload.")
 
@@ -123,21 +143,27 @@ else:
     elif st.session_state.role == "IC Upload":
         st.title("📤 Dashboard IC Upload")
         
-        # Ambil list NBH dari data admin jika ada, kalau tidak pakai manual text input
         st.subheader("Input Bukti Kerja")
-        if st.session_state.uploaded_data is not None and 'NBH' in st.session_state.uploaded_data.columns:
-            nbh_options = st.session_state.uploaded_data['NBH'].unique().tolist()
-            nbh_choice = st.selectbox("Pilih NBH", nbh_options)
+        
+        # Mengecek apakah data CSV sudah ada untuk mengambil NBH secara otomatis
+        if st.session_state.uploaded_data is not None:
+            # Mencari kolom NBH atau menggunakan kolom indeks ke-1 jika nama kolom persisnya berbeda
+            kolom_nbh = [col for col in st.session_state.uploaded_data.columns if 'NBH' in col]
+            if kolom_nbh:
+                nbh_options = st.session_state.uploaded_data[kolom_nbh[0]].dropna().unique().tolist()
+                nbh_choice = st.selectbox("Pilih NBH", nbh_options)
+            else:
+                nbh_choice = st.text_input("Masukkan NBH (Ketik Manual)")
         else:
-            nbh_choice = st.text_input("Masukkan/Pilih NBH (Ketik Manual karena CSV Admin Kosong)")
+            nbh_choice = st.text_input("Masukkan NBH (Ketik Manual karena CSV Admin Kosong)")
             
         img_file = st.file_uploader("Upload Bukti Foto", type=["jpg", "jpeg", "png"])
         
         if st.button("Submit Upload", type="primary"):
             if nbh_choice and img_file:
-                # Simpan data ke session state dengan primary status "Selesai" sesuai request
+                # Simpan data ke session state dengan primary status "Selesai"
                 st.session_state.ic_uploads.append({
-                    "nbh": nbh_choice,
+                    "nbh": str(nbh_choice),
                     "image": img_file,
                     "status": "Selesai"
                 })
@@ -173,18 +199,32 @@ else:
     elif st.session_state.role == "Toko":
         st.title("🏪 Dashboard Toko")
         
+        # Fitur Input Mandiri untuk Toko memasukkan Kodenya sendiri
+        st.subheader("Pengaturan Akses Toko")
+        kode_toko_anda = st.text_input("Masukkan Kode Toko Anda untuk Filter Data (Contoh: TWSU, T2SU, TAPK):", value="TWSU").strip().upper()
+        
         tab1, tab2 = st.tabs(["📊 Data NBH", "💬 Bukti Chat"])
         
         with tab1:
-            st.header("Melihat Data NBH & Progress")
+            st.header(f"Melihat Data NBH - Toko {kode_toko_anda}")
+            
             if st.session_state.uploaded_data is not None:
-                st.dataframe(st.session_state.uploaded_data)
+                nama_kolom_toko = st.session_state.uploaded_data.columns[0]
+                
+                # Memfilter data utama: Hanya menampilkan baris yang kolom TOKO-nya cocok dengan input toko
+                data_toko_ini = st.session_state.uploaded_data[st.session_state.uploaded_data[nama_kolom_toko].astype(str).str.strip().str.upper() == kode_toko_anda]
+                
+                if not data_toko_ini.empty:
+                    st.dataframe(data_toko_ini, use_container_width=True)
+                else:
+                    st.warning(f"Tidak ada data NBH yang ditemukan di CSV untuk kode toko '{kode_toko_anda}'.")
             else:
                 st.info("Belum ada data NBH utama dari Admin.")
                 
+            st.write("---")
             st.subheader("Status Foto dari IC")
             if st.session_state.ic_uploads:
-                # Menampilkan rangkuman status foto untuk toko
+                # Menampilkan status dokumen IC yang ada
                 toko_view = [{"NBH": x["nbh"], "Status Dokumen": x["status"]} for x in st.session_state.ic_uploads]
                 st.table(toko_view)
             else:
@@ -192,6 +232,5 @@ else:
                 
         with tab2:
             st.header("Bukti Chat")
-            st.info("Fitur tampilan bukti chat. (Bisa disesuaikan dengan kebutuhan integrasi masa depan)")
-            # Simulasi atau integrasi file chat di sini
+            st.info("Fitur tampilan bukti chat toko.")
             st.text_area("Catatan/Pesan Toko ke Tim IC", placeholder="Tulis pesan atau pantau log chat di sini...")
