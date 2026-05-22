@@ -1,35 +1,45 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 
 # ==========================================
-# 1. KONFIGURASI HALAMAN & SEMBUNYIKAN GITHUB (PERBAIKAN CSS COCOK UNTUK SEMUA VERSI)
+# 1. KONFIGURASI HALAMAN
 # ==========================================
 st.set_page_config(page_title="MTP Dashboard System", layout="wide")
 
-# Menyembunyikan seluruh elemen toolbar pojok kanan atas secara paksa
-st.markdown(
+# Trik Javascript + CSS Kuat untuk Menghapus Paksa Ikon GitHub & Teks Share
+components.html(
     """
-    <style>
-    /* Sembunyikan ikon GitHub, Share, dan tombol deploy */
-    .stAppDeployButton, [data-testid="stActionButton"], .st-emotion-cache-1lb4g6g, .st-emotion-cache-12w0qpk {
-        display: none !important;
-    }
-    /* Sembunyikan menu titik tiga bawaan jika ingin benar-benar bersih */
-    #MainMenu, [data-testid="stIconMaterial"] {
-        visibility: hidden !important;
-    }
-    /* Sembunyikan footer */
-    footer {
-        visibility: hidden !important;
-    }
-    /* Menghilangkan ruang kosong di atas setelah ikon disembunyikan */
-    .stAppHeader {
-        background-color: rgba(0, 0, 0, 0);
-    }
-    </style>
+    <script>
+        const removeElements = () => {
+            // Target semua kemungkinan class tombol deploy/github di Streamlit versi baru
+            const selectors = [
+                '.stAppDeployButton', 
+                '[data-testid="stActionButton"]', 
+                'header', 
+                '.stAppHeader',
+                '[data-testid="stIconMaterial"]'
+            ];
+            
+            selectors.forEach(selector => {
+                const elements = parent.document.querySelectorAll(selector);
+                elements.forEach(el => {
+                    el.style.display = 'none';
+                    el.style.visibility = 'hidden';
+                });
+            });
+        };
+        
+        // Jalankan berulang untuk memastikan komponen yang telat dimuat tetap terhapus
+        setInterval(removeElements, 500);
+    </script>
     """,
-    unsafe_allow_html=True
+    height=0,
+    width=0
 )
+
+# Menyembunyikan footer
+st.markdown("<style>footer {visibility: hidden !important;}</style>", unsafe_allow_html=True)
 
 # ==========================================
 # 2. DATABASE KREDENSIAL
@@ -52,7 +62,6 @@ if "uploaded_data" not in st.session_state:
 if "ic_uploads" not in st.session_state:
     st.session_state.ic_uploads = []  
 
-# Fungsi Logout
 def logout():
     st.session_state.logged_in = False
     st.session_state.role = None
@@ -83,7 +92,6 @@ if not st.session_state.logged_in:
 # 5. HALAMAN DASHBOARD (JIKA SUDAH LOGIN)
 # ==========================================
 else:
-    # Sidebar Navigasi
     st.sidebar.title(f"👤 {st.session_state.role}")
     st.sidebar.write("Selamat Datang!")
     if st.sidebar.button("Log Out", type="secondary"):
@@ -92,7 +100,6 @@ else:
     # --- DASHBOARD ADMIN ---
     if st.session_state.role == "Admin":
         st.title("🖥️ Dashboard Admin")
-        
         tab1, tab2 = st.tabs(["📁 Upload & Kelola CSV", "📸 Cek & Edit Bukti Foto IC"])
         
         with tab1:
@@ -106,7 +113,7 @@ else:
                         df = pd.read_csv(uploaded_file, sep='|')
                         if delete_previous == "YA":
                             st.session_state.uploaded_data = df
-                            st.warning("Data sebelumnya telah dihapus dan digantikan data baru.")
+                            st.warning("Data sebelumnya telah dihapus.")
                         else:
                             if st.session_state.uploaded_data is not None:
                                 st.session_state.uploaded_data = pd.concat([st.session_state.uploaded_data, df], ignore_index=True)
@@ -175,7 +182,7 @@ else:
                     "image": img_file,
                     "status": "Selesai"
                 })
-                st.success("Bukti berhasil diupload dengan status: Selesai!")
+                st.success("Bukti berhasil diupload!")
                 st.rerun()
             else:
                 st.error("Mohon isi NBH dan upload foto.")
@@ -205,9 +212,8 @@ else:
     # --- DASHBOARD TOKO ---
     elif st.session_state.role == "Toko":
         st.title("🏪 Dashboard Toko")
-        
         st.subheader("Pengaturan Akses Toko")
-        kode_toko_anda = st.text_input("Masukkan Kode Toko Anda untuk Filter Data (Contoh: TWSU, T2SU):", value="TWSU").strip().upper()
+        kode_toko_anda = st.text_input("Masukkan Kode Toko Anda:", value="TWSU").strip().upper()
         
         tab1, tab2 = st.tabs(["📊 Data NBH", "💬 Bukti Chat"])
         
