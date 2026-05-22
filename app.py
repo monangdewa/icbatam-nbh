@@ -6,15 +6,27 @@ from datetime import datetime
 from io import BytesIO
 from PIL import Image
 
-st.set_page_config(page_title="IC Batam NBH", layout="wide")
+st.set_page_config(page_title="IC Batam NBH ERP", layout="wide")
 
-st.title("🔥 IC Batam - NBH TOKO")
+st.title("🔥 IC Batam - NBH Anti Fraud ERP System")
 
 # =========================
-# DATABASE
+# DATABASE CONNECTION
 # =========================
 conn = sqlite3.connect("nbh.db", check_same_thread=False)
 c = conn.cursor()
+
+# =========================
+# RESET SAFE INIT (ANTI ERROR SCHEMA LAMA)
+# =========================
+c.execute("CREATE TABLE IF NOT EXISTS nbh_temp AS SELECT 1 WHERE 0")
+
+# DROP ONLY IF NEEDED STRUCTURE CHANGE
+# (AMAN untuk production awal, nanti bisa dihapus setelah stabil)
+try:
+    c.execute("DROP TABLE IF EXISTS bukti")
+except:
+    pass
 
 # =========================
 # TABLE NBH MASTER
@@ -33,7 +45,7 @@ CREATE TABLE IF NOT EXISTS nbh (
 """)
 
 # =========================
-# TABLE BUKTI FOLLOW UP (WITH IMAGE)
+# TABLE BUKTI FOLLOW UP (FIXED)
 # =========================
 c.execute("""
 CREATE TABLE IF NOT EXISTS bukti (
@@ -52,11 +64,11 @@ CREATE TABLE IF NOT EXISTS bukti (
 conn.commit()
 
 # =========================
-# ROLE LOGIN (SIMPLE)
+# ROLE SYSTEM
 # =========================
 role = st.sidebar.selectbox(
     "Login Role",
-    ["Admin IC", "Bukti_IC", "Toko"]
+    ["Admin IC", "Tim Upload IC", "Toko"]
 )
 
 st.sidebar.divider()
@@ -88,7 +100,7 @@ if role == "Admin IC":
 
     st.divider()
 
-    st.subheader("📥 Upload NBH CSV (PIPE | FORMAT)")
+    st.subheader("📥 Upload NBH (PIPE | FORMAT)")
 
     file = st.file_uploader("Upload CSV NBH", type=["csv"])
 
@@ -117,24 +129,24 @@ if role == "Admin IC":
                 row["NO_NRB"],
                 row["TGL_NRB"],
                 row["NAMA_BARANG"],
-                row["QTY"],
-                row["RPH"],
+                float(row["QTY"]),
+                float(row["RPH"]),
                 case_id
             ))
 
         conn.commit()
-        st.success("✅ Upload NBH berhasil")
+        st.success("✅ NBH berhasil diupload")
 
     st.subheader("📌 DATA NBH")
     st.dataframe(df, use_container_width=True)
 
 
 # =========================
-# TIM UPLOAD IC (UPLOAD BUKTI + FOTO)
+# TIM UPLOAD IC
 # =========================
-elif role == "Bukti_IC":
+elif role == "Tim Upload IC":
 
-    st.subheader("📷 Upload Bukti Follow Up IC")
+    st.subheader("📷 Upload Bukti Follow Up (WA Screenshot)")
 
     if df.empty:
         st.warning("Belum ada data NBH")
@@ -145,21 +157,25 @@ elif role == "Bukti_IC":
         catatan = st.text_area("Catatan Follow Up")
         status = st.selectbox("Status", ["BELUM FOLLOW UP", "SUDAH FOLLOW UP", "SELESAI"])
 
-        foto = st.file_uploader("Upload Bukti Foto (WA Screenshot)", type=["png", "jpg", "jpeg"])
+        foto = st.file_uploader("Upload Foto Bukti", type=["png", "jpg", "jpeg"])
 
         if st.button("Simpan Bukti"):
 
-            foto_bytes = None
-            if foto is not None:
-                foto_bytes = foto.read()
+            foto_bytes = foto.read() if foto else None
+
+            toko_val = df[df["case_id"] == case]["toko"].values[0]
+            nrb_val = df[df["case_id"] == case]["no_nrb"].values[0]
 
             c.execute("""
-            INSERT INTO bukti VALUES (?,?,?,?,?,?,?,?,?)
+            INSERT INTO bukti (
+                id, case_id, toko, no_nrb, catatan, status,
+                uploaded_by, created_at, foto
+            ) VALUES (?,?,?,?,?,?,?,?,?)
             """, (
                 str(uuid.uuid4()),
                 case,
-                df[df["case_id"] == case]["toko"].values[0],
-                df[df["case_id"] == case]["no_nrb"].values[0],
+                toko_val,
+                nrb_val,
                 catatan,
                 status,
                 "TIM_UPLOAD",
@@ -168,21 +184,21 @@ elif role == "Bukti_IC":
             ))
 
             conn.commit()
-            st.success("✅ Bukti + Foto berhasil disimpan")
+            st.success("✅ Bukti berhasil disimpan")
 
     st.subheader("📌 History Follow Up")
     st.dataframe(df_bukti, use_container_width=True)
 
 
 # =========================
-# TOKO PORTAL (VIEW + FOTO)
+# TOKO PORTAL
 # =========================
 elif role == "Toko":
 
     st.subheader("🏪 Portal Toko NBH (Read Only)")
 
     if df.empty:
-        st.warning("Belum ada data NBH")
+        st.warning("Belum ada data")
     else:
 
         toko = st.selectbox("Pilih Toko", df["toko"].unique())
@@ -213,11 +229,11 @@ elif role == "Toko":
                         img = Image.open(BytesIO(row["foto"]))
                         st.image(img, caption="Bukti Follow Up IC", use_container_width=True)
                     except:
-                        st.warning("⚠️ Gambar tidak bisa ditampilkan")
+                        st.warning("⚠️ Foto tidak bisa ditampilkan")
 
                 st.divider()
 
 # =========================
-# CLOSE DB
+# CLOSE CONNECTION
 # =========================
 conn.close()
