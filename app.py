@@ -1,250 +1,197 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
-import uuid
-from datetime import datetime
-from io import BytesIO
-from PIL import Image
 
-st.set_page_config(page_title="IC Batam NBH ERP", layout="wide")
+# Konfigurasi Halaman
+st.set_page_config(page_title="MTP Dashboard System", layout="wide")
 
-st.title("🔥 IC Batam - NBH Anti Fraud ERP System")
+# 1. DATABASE KREDENSIAL (Sesuai Permintaan)
+CREDENTIALS = {
+    "Admin": {"user": "MTP", "pwd": "1712"},
+    "IC Upload": {"user": "ICBTM", "pwd": "@ICBTM"},
+    "Toko": {"user": "BTMJUARA", "pwd": "BTMJUARA"}
+}
 
-# =========================
-# DATABASE
-# =========================
-conn = sqlite3.connect("nbh.db", check_same_thread=False)
-c = conn.cursor()
+# 2. INISIALISASI SESSION STATE (Penyimpanan Data Sementara)
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "role" not in st.session_state:
+    st.session_state.role = None
+if "uploaded_data" not in st.session_state:
+    st.session_state.uploaded_data = None  # Untuk menyimpan data CSV Admin
+if "ic_uploads" not in st.session_state:
+    st.session_state.ic_uploads = []  # Untuk menyimpan data bukti foto dari IC
 
-# =========================
-# TABLE NBH
-# =========================
-c.execute("""
-CREATE TABLE IF NOT EXISTS nbh (
-    id TEXT,
-    toko TEXT,
-    no_nrb TEXT,
-    tgl_nrb TEXT,
-    nama_barang TEXT,
-    qty REAL,
-    rph REAL,
-    case_id TEXT
-)
-""")
+# 3. FUNGSI LOGOUT
+def logout():
+    st.session_state.logged_in = False
+    st.session_state.role = None
+    st.rerun()
 
-# =========================
-# TABLE BUKTI (FINAL FIX)
-# =========================
-c.execute("""
-CREATE TABLE IF NOT EXISTS bukti (
-    id TEXT,
-    case_id TEXT,
-    toko TEXT,
-    no_nrb TEXT,
-    catatan TEXT,
-    status TEXT,
-    uploaded_by TEXT,
-    created_at TEXT,
-    foto BLOB
-)
-""")
-
-conn.commit()
-
-# =========================
-# LOAD FUNCTIONS (REAL TIME SAFE)
-# =========================
-def load_nbh():
-    df = pd.read_sql("SELECT * FROM nbh", conn)
-    if not df.empty:
-        df["case_id"] = df["case_id"].astype(str).str.strip()
-    return df
-
-def load_bukti():
-    df = pd.read_sql("SELECT * FROM bukti", conn)
-    if not df.empty:
-        df["case_id"] = df["case_id"].astype(str).str.strip()
-    return df
-
-# =========================
-# ROLE SYSTEM
-# =========================
-role = st.sidebar.selectbox(
-    "Login Role",
-    ["Admin IC", "Tim Upload IC", "Toko"]
-)
-
-st.sidebar.divider()
-
-# =========================
-# =========================
-# ADMIN IC
-# =========================
-if role == "Admin IC":
-
-    df = load_nbh()
-
-    st.subheader("📊 Dashboard Admin IC")
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("Total Case", df["case_id"].nunique() if not df.empty else 0)
-    col2.metric("Total Toko", df["toko"].nunique() if not df.empty else 0)
-    col3.metric("Total NRB", df["no_nrb"].nunique() if not df.empty else 0)
-
-    st.divider()
-
-    st.subheader("📥 Upload NBH (PIPE | FORMAT)")
-
-    file = st.file_uploader("Upload CSV NBH", type=["csv"])
-
-    if file:
-
-        data = pd.read_csv(file, sep="|", engine="python")
-
-        if len(data.columns) == 1:
-            data = data.iloc[:, 0].str.split("|", expand=True)
-
-        data.columns = [
-            "TOKO","NO_NRB","TGL_NRB","NO_BA","TGL_BA",
-            "PLUIDM","PLUIGR","NAMA_BARANG","KET_RETUR",
-            "QTY","RPH"
-        ]
-
-        for _, row in data.iterrows():
-
-            case_id = f"{row['TOKO']}_{row['NO_NRB']}_{row['TGL_NRB']}".strip()
-
-            c.execute("""
-            INSERT INTO nbh VALUES (?,?,?,?,?,?,?,?)
-            """, (
-                str(uuid.uuid4()),
-                row["TOKO"],
-                row["NO_NRB"],
-                row["TGL_NRB"],
-                row["NAMA_BARANG"],
-                float(row["QTY"]),
-                float(row["RPH"]),
-                case_id
-            ))
-
-        conn.commit()
-        st.success("✅ NBH berhasil diupload")
-
-    st.subheader("📌 DATA NBH")
-    st.dataframe(df, use_container_width=True)
-
-
-# =========================
-# TIM UPLOAD IC (FIX FINAL AUTO STATUS)
-# =========================
-elif role == "Tim Upload IC":
-
-    df = load_nbh()
-    df_bukti = load_bukti()
-
-    st.subheader("📷 Upload Bukti Follow Up (AUTO STATUS = SELESAI)")
-
-    if df.empty:
-        st.warning("Belum ada data NBH")
-    else:
-
-        case = st.selectbox("Pilih Case ID", df["case_id"].unique())
-
-        catatan = st.text_area("Catatan Follow Up")
-
-        foto = st.file_uploader("Upload Foto Bukti (WA Screenshot)", type=["png", "jpg", "jpeg"])
-
-        if st.button("Simpan Bukti"):
-
-            if foto is None:
-                st.error("❌ Foto wajib diupload")
-                st.stop()
-
-            foto_bytes = foto.read()
-
-            toko_val = df[df["case_id"] == case]["toko"].values[0]
-            nrb_val = df[df["case_id"] == case]["no_nrb"].values[0]
-
-            c.execute("""
-            INSERT INTO bukti (
-                id, case_id, toko, no_nrb, catatan, status,
-                uploaded_by, created_at, foto
-            ) VALUES (?,?,?,?,?,?,?,?,?)
-            """, (
-                str(uuid.uuid4()),
-                case.strip(),
-                toko_val,
-                nrb_val,
-                catatan,
-                "SELESAI",  # 🔥 AUTO STATUS FIX
-                "TIM_UPLOAD",
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                foto_bytes
-            ))
-
-            conn.commit()
-
-            st.success("✅ Bukti berhasil diupload (Status: SELESAI)")
+# ==========================================
+# HALAMAN LOGIN
+# ==========================================
+if not st.session_state.logged_in:
+    st.title("🔒 MTP System Login")
+    st.subheader("Silakan pilih jenis login dan masukkan akun Anda")
+    
+    # Form Login
+    role_choice = st.selectbox("Jenis Login", ["Admin", "IC Upload", "Toko"])
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    
+    if st.button("Login", type="primary"):
+        target = CREDENTIALS[role_choice]
+        if username == target["user"] and password == target["pwd"]:
+            st.session_state.logged_in = True
+            st.session_state.role = role_choice
+            st.success(f"Login berhasil sebagai {role_choice}!")
             st.rerun()
-
-    st.subheader("📌 HISTORY FOLLOW UP (SELESAI)")
-
-    df_bukti = df_bukti[df_bukti["status"] == "SELESAI"]
-
-    st.dataframe(df_bukti, use_container_width=True)
-
-
-# =========================
-# TOKO PORTAL (VIEW + FOTO FIX)
-# =========================
-elif role == "Toko":
-
-    df = load_nbh()
-    df_bukti = load_bukti()
-
-    st.subheader("🏪 Portal Toko NBH (Read Only)")
-
-    if df.empty:
-        st.warning("Belum ada data")
-    else:
-
-        toko = st.selectbox("Pilih Toko", df["toko"].unique())
-
-        toko_data = df[df["toko"] == toko]
-
-        st.subheader("📊 NBH Anda")
-        st.dataframe(toko_data, use_container_width=True)
-
-        st.subheader("📷 Bukti Follow Up IC")
-
-        case_list = [str(x).strip() for x in toko_data["case_id"].unique()]
-
-        bukti_toko = df_bukti[
-            df_bukti["case_id"].astype(str).str.strip().isin(case_list)
-        ]
-
-        if bukti_toko.empty:
-            st.info("Belum ada bukti follow up")
         else:
+            st.error("Username atau Password salah. Silakan coba lagi.")
 
-            for _, row in bukti_toko.iterrows():
+# ==========================================
+# HALAMAN DASHBOARD (JIKA SUDAH LOGIN)
+# ==========================================
+else:
+    # Sidebar untuk Navigasi & Logout
+    st.sidebar.title(f"👤 {st.session_state.role}")
+    st.sidebar.write("Selamat Datang!")
+    if st.sidebar.button("Log Out", type="secondary"):
+        logout()
 
-                st.write(f"📌 Case ID: {row['case_id']}")
-                st.write(f"Status: {row['status']}")
-                st.write(f"Catatan: {row['catatan']}")
-                st.write(f"Timestamp: {row['created_at']}")
+    # --- DASHBOARD ADMIN ---
+    if st.session_state.role == "Admin":
+        st.title("🖥️ Dashboard Admin")
+        
+        tab1, tab2 = st.tabs(["📁 Upload & Kelola CSV", "📸 Cek & Edit Bukti Foto IC"])
+        
+        with tab1:
+            st.header("Upload Data CSV")
+            
+            # Pilihan hapus data sebelumnya
+            delete_previous = st.radio("Hapus data sebelumnya sebelum upload baru?", ("Tidak", "YA"))
+            
+            uploaded_file = st.file_uploader("Pilih file CSV", type=["csv"])
+            
+            if uploaded_file is not None:
+                if st.button("Proses File CSV"):
+                    df = pd.read_csv(uploaded_file)
+                    
+                    if delete_previous == "YA":
+                        st.session_state.uploaded_data = df
+                        st.warning("Data sebelumnya telah dihapus dan digantikan data baru.")
+                    else:
+                        if st.session_state.uploaded_data is not None:
+                            st.session_state.uploaded_data = pd.concat([st.session_state.uploaded_data, df], ignore_index=True)
+                            st.success("Data baru berhasil ditambahkan ke data lama.")
+                        else:
+                            st.session_state.uploaded_data = df
+                            st.success("Data berhasil diupload.")
+            
+            # Menampilkan data CSV yang ada
+            if st.session_state.uploaded_data is not None:
+                st.subheader("Data Saat Ini")
+                st.dataframe(st.session_state.uploaded_data)
+            else:
+                st.info("Belum ada data CSV yang diupload.")
 
-                if row["foto"] is not None:
-                    try:
-                        img = Image.open(BytesIO(row["foto"]))
-                        st.image(img, caption="Bukti Follow Up IC", use_container_width=True)
-                    except:
-                        st.warning("⚠️ Foto tidak bisa dibuka")
+        with tab2:
+            st.header("Bukti Foto dari IC")
+            if not st.session_state.ic_uploads:
+                st.info("Belum ada bukti foto yang diupload oleh IC.")
+            else:
+                for idx, item in enumerate(st.session_state.ic_uploads):
+                    with st.container(border=True):
+                        col1, col2 = st.columns([2, 1])
+                        with col1:
+                            st.write(f"**NBH:** {item['nbh']}")
+                            st.write(f"**Status:** {item['status']}")
+                            st.image(item['image'], caption=f"Foto untuk NBH: {item['nbh']}", width=300)
+                        with col2:
+                            new_nbh = st.text_input(f"Edit NBH ({idx})", value=item['nbh'], key=f"admin_edit_{idx}")
+                            if st.button(f"Simpan Perubahan ({idx})", key=f"admin_save_{idx}"):
+                                st.session_state.ic_uploads[idx]['nbh'] = new_nbh
+                                st.success("Data NBH berhasil diperbarui!")
+                                st.rerun()
+                                
+                            if st.button(f"Hapus Foto ({idx})", key=f"admin_del_{idx}"):
+                                st.session_state.ic_uploads.pop(idx)
+                                st.error("Foto berhasil dihapus.")
+                                st.rerun()
 
-                st.divider()
+    # --- DASHBOARD IC UPLOAD ---
+    elif st.session_state.role == "IC Upload":
+        st.title("📤 Dashboard IC Upload")
+        
+        # Ambil list NBH dari data admin jika ada, kalau tidak pakai manual text input
+        st.subheader("Input Bukti Kerja")
+        if st.session_state.uploaded_data is not None and 'NBH' in st.session_state.uploaded_data.columns:
+            nbh_options = st.session_state.uploaded_data['NBH'].unique().tolist()
+            nbh_choice = st.selectbox("Pilih NBH", nbh_options)
+        else:
+            nbh_choice = st.text_input("Masukkan/Pilih NBH (Ketik Manual karena CSV Admin Kosong)")
+            
+        img_file = st.file_uploader("Upload Bukti Foto", type=["jpg", "jpeg", "png"])
+        
+        if st.button("Submit Upload", type="primary"):
+            if nbh_choice and img_file:
+                # Simpan data ke session state dengan primary status "Selesai" sesuai request
+                st.session_state.ic_uploads.append({
+                    "nbh": nbh_choice,
+                    "image": img_file,
+                    "status": "Selesai"
+                })
+                st.success("Bukti berhasil diupload dengan status: Selesai!")
+                st.rerun()
+            else:
+                st.error("Mohon isi NBH dan upload foto terlebih dahulu.")
+                
+        # Kelola foto yang sudah diupload oleh IC sendiri
+        st.write("---")
+        st.subheader("Riwayat Upload Anda")
+        if not st.session_state.ic_uploads:
+            st.info("Anda belum mengupload foto apapun.")
+        else:
+            for idx, item in enumerate(st.session_state.ic_uploads):
+                with st.container(border=True):
+                    col1, col2 = st.columns([2, 1])
+                    with col1:
+                        st.write(f"**NBH:** {item['nbh']} | **Status:** {item['status']}")
+                        st.image(item['image'], width=200)
+                    with col2:
+                        edit_nbh_ic = st.text_input(f"Ubah NBH", value=item['nbh'], key=f"ic_edit_{idx}")
+                        if st.button(f"Update NBH", key=f"ic_save_{idx}"):
+                            st.session_state.ic_uploads[idx]['nbh'] = edit_nbh_ic
+                            st.success("NBH diperbarui.")
+                            st.rerun()
+                        if st.button(f"Hapus", key=f"ic_del_{idx}"):
+                            st.session_state.ic_uploads.pop(idx)
+                            st.warning("Data dihapus.")
+                            st.rerun()
 
-# =========================
-# CLOSE DB
-# =========================
-conn.close()
+    # --- DASHBOARD TOKO ---
+    elif st.session_state.role == "Toko":
+        st.title("🏪 Dashboard Toko")
+        
+        tab1, tab2 = st.tabs(["📊 Data NBH", "💬 Bukti Chat"])
+        
+        with tab1:
+            st.header("Melihat Data NBH & Progress")
+            if st.session_state.uploaded_data is not None:
+                st.dataframe(st.session_state.uploaded_data)
+            else:
+                st.info("Belum ada data NBH utama dari Admin.")
+                
+            st.subheader("Status Foto dari IC")
+            if st.session_state.ic_uploads:
+                # Menampilkan rangkuman status foto untuk toko
+                toko_view = [{"NBH": x["nbh"], "Status Dokumen": x["status"]} for x in st.session_state.ic_uploads]
+                st.table(toko_view)
+            else:
+                st.info("Belum ada update bukti fisik dari IC.")
+                
+        with tab2:
+            st.header("Bukti Chat")
+            st.info("Fitur tampilan bukti chat. (Bisa disesuaikan dengan kebutuhan integrasi masa depan)")
+            # Simulasi atau integrasi file chat di sini
+            st.text_area("Catatan/Pesan Toko ke Tim IC", placeholder="Tulis pesan atau pantau log chat di sini...")
