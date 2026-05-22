@@ -15,7 +15,8 @@ file = st.sidebar.file_uploader("Upload file CSV", type=["csv"])
 
 if file is not None:
 
-    df = pd.read_csv(file, sep=None, engine="python")
+    df = pd.read_csv(file, sep=None, engine="python", encoding="utf-8")
+    df.columns = df.columns.str.strip()
 
     st.success("✅ File berhasil diupload")
 
