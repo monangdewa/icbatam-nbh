@@ -6,9 +6,9 @@ from datetime import datetime
 from io import BytesIO
 from PIL import Image
 
-st.set_page_config(page_title="IC Batam NBH ERP", layout="wide")
+st.set_page_config(page_title="IC Batam NBH", layout="wide")
 
-st.title("🔥 IC Batam - NBH Anti Fraud ERP System")
+st.title("🔥 IC Batam - NBH TOKO")
 
 # =========================
 # DATABASE
@@ -56,7 +56,7 @@ conn.commit()
 # =========================
 role = st.sidebar.selectbox(
     "Login Role",
-    ["Admin IC", "Tim Upload IC", "Toko"]
+    ["Admin IC", "Bukti_IC", "Toko"]
 )
 
 st.sidebar.divider()
@@ -132,7 +132,7 @@ if role == "Admin IC":
 # =========================
 # TIM UPLOAD IC (UPLOAD BUKTI + FOTO)
 # =========================
-elif role == "Tim Upload IC":
+elif role == "Bukti_IC":
 
     st.subheader("📷 Upload Bukti Follow Up IC")
 
