@@ -15,14 +15,38 @@ file = st.sidebar.file_uploader("Upload file CSV", type=["csv"])
 
 if file is not None:
 
-    df = pd.read_csv(file, sep=",", engine="python", encoding="utf-8")
+    # 🔥 FIX: CSV parsing lebih aman
+    df = pd.read_csv(
+        file,
+        sep=",",
+        engine="python",
+        encoding="utf-8-sig"
+    )
+
+    # =========================
+    # CLEAN COLUMN (STABIL)
+    # =========================
+    df.columns = (
+        df.columns
+        .str.strip()
+        .str.upper()
+        .str.replace(" ", "_")
+    )
+
+    st.write("📌 COLUMNS DETECTED:", df.columns.tolist())
+    st.write("📌 TOTAL COLUMNS:", len(df.columns))
 
     st.success("✅ File berhasil diupload")
 
     # =========================
-    # CLEAN COLUMN
+    # SAFETY CHECK (ANTI ERROR)
     # =========================
-    df.columns = df.columns.str.strip()
+    required_cols = ["TOKO", "NO_NRB", "TGL_NRB"]
+
+    for col in required_cols:
+        if col not in df.columns:
+            st.error(f"❌ Kolom {col} tidak ditemukan di file!")
+            st.stop()
 
     # =========================
     # FIX DATE FORMAT
@@ -51,7 +75,6 @@ if file is not None:
     # SHOW DATA CLEAN
     # =========================
     st.subheader("📌 Data NBH (Clean & Ready System)")
-
     st.dataframe(df, use_container_width=True)
 
     # =========================
@@ -79,13 +102,13 @@ if file is not None:
     filtered = df.copy()
 
     if toko:
-        filtered = filtered[filtered["TOKO"].astype(str).str.contains(toko, case=False)]
+        filtered = filtered[filtered["TOKO"].astype(str).str.contains(toko, case=False, na=False)]
 
     if nrb:
-        filtered = filtered[filtered["NO_NRB"].astype(str).str.contains(nrb, case=False)]
+        filtered = filtered[filtered["NO_NRB"].astype(str).str.contains(nrb, case=False, na=False)]
 
     if case:
-        filtered = filtered[filtered["CASE_ID"].astype(str).str.contains(case, case=False)]
+        filtered = filtered[filtered["CASE_ID"].astype(str).str.contains(case, case=False, na=False)]
 
     st.dataframe(filtered, use_container_width=True)
 
