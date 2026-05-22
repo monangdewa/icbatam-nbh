@@ -18,7 +18,7 @@ if file is not None:
     # 🔥 FIX: CSV parsing lebih aman
     df = pd.read_csv(
         file,
-        sep=",",
+        sep="|"|
         engine="python",
         encoding="utf-8-sig"
     )
