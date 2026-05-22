@@ -17,7 +17,7 @@ conn = sqlite3.connect("nbh.db", check_same_thread=False)
 c = conn.cursor()
 
 # =========================
-# TABLES (SAFE INIT)
+# TABLE NBH
 # =========================
 c.execute("""
 CREATE TABLE IF NOT EXISTS nbh (
@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS nbh (
 )
 """)
 
+# =========================
+# TABLE BUKTI (FINAL FIX)
+# =========================
 c.execute("""
 CREATE TABLE IF NOT EXISTS bukti (
     id TEXT,
@@ -49,7 +52,7 @@ CREATE TABLE IF NOT EXISTS bukti (
 conn.commit()
 
 # =========================
-# LOAD FUNCTIONS (REAL TIME)
+# LOAD FUNCTIONS (REAL TIME SAFE)
 # =========================
 def load_nbh():
     df = pd.read_sql("SELECT * FROM nbh", conn)
@@ -64,7 +67,7 @@ def load_bukti():
     return df
 
 # =========================
-# ROLE
+# ROLE SYSTEM
 # =========================
 role = st.sidebar.selectbox(
     "Login Role",
@@ -133,14 +136,14 @@ if role == "Admin IC":
 
 
 # =========================
-# TIM UPLOAD IC
+# TIM UPLOAD IC (FIX FINAL AUTO STATUS)
 # =========================
 elif role == "Tim Upload IC":
 
     df = load_nbh()
     df_bukti = load_bukti()
 
-    st.subheader("📷 Upload Bukti Follow Up (WA Screenshot)")
+    st.subheader("📷 Upload Bukti Follow Up (AUTO STATUS = SELESAI)")
 
     if df.empty:
         st.warning("Belum ada data NBH")
@@ -149,13 +152,16 @@ elif role == "Tim Upload IC":
         case = st.selectbox("Pilih Case ID", df["case_id"].unique())
 
         catatan = st.text_area("Catatan Follow Up")
-        status = st.selectbox("Status", ["BELUM FOLLOW UP", "SUDAH FOLLOW UP", "SELESAI"])
 
-        foto = st.file_uploader("Upload Foto Bukti", type=["png", "jpg", "jpeg"])
+        foto = st.file_uploader("Upload Foto Bukti (WA Screenshot)", type=["png", "jpg", "jpeg"])
 
         if st.button("Simpan Bukti"):
 
-            foto_bytes = foto.read() if foto else None
+            if foto is None:
+                st.error("❌ Foto wajib diupload")
+                st.stop()
+
+            foto_bytes = foto.read()
 
             toko_val = df[df["case_id"] == case]["toko"].values[0]
             nrb_val = df[df["case_id"] == case]["no_nrb"].values[0]
@@ -171,7 +177,7 @@ elif role == "Tim Upload IC":
                 toko_val,
                 nrb_val,
                 catatan,
-                status,
+                "SELESAI",  # 🔥 AUTO STATUS FIX
                 "TIM_UPLOAD",
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 foto_bytes
@@ -179,15 +185,18 @@ elif role == "Tim Upload IC":
 
             conn.commit()
 
-            st.success("✅ Bukti berhasil disimpan")
+            st.success("✅ Bukti berhasil diupload (Status: SELESAI)")
             st.rerun()
 
-    st.subheader("📌 History Follow Up")
+    st.subheader("📌 HISTORY FOLLOW UP (SELESAI)")
+
+    df_bukti = df_bukti[df_bukti["status"] == "SELESAI"]
+
     st.dataframe(df_bukti, use_container_width=True)
 
 
 # =========================
-# TOKO PORTAL
+# TOKO PORTAL (VIEW + FOTO FIX)
 # =========================
 elif role == "Toko":
 
