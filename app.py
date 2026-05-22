@@ -11,25 +11,13 @@ st.set_page_config(page_title="IC Batam NBH ERP", layout="wide")
 st.title("🔥 IC Batam - NBH Anti Fraud ERP System")
 
 # =========================
-# DATABASE CONNECTION
+# DATABASE
 # =========================
 conn = sqlite3.connect("nbh.db", check_same_thread=False)
 c = conn.cursor()
 
 # =========================
-# RESET SAFE INIT (ANTI ERROR SCHEMA LAMA)
-# =========================
-c.execute("CREATE TABLE IF NOT EXISTS nbh_temp AS SELECT 1 WHERE 0")
-
-# DROP ONLY IF NEEDED STRUCTURE CHANGE
-# (AMAN untuk production awal, nanti bisa dihapus setelah stabil)
-try:
-    c.execute("DROP TABLE IF EXISTS bukti")
-except:
-    pass
-
-# =========================
-# TABLE NBH MASTER
+# TABLES (SAFE INIT)
 # =========================
 c.execute("""
 CREATE TABLE IF NOT EXISTS nbh (
@@ -44,9 +32,6 @@ CREATE TABLE IF NOT EXISTS nbh (
 )
 """)
 
-# =========================
-# TABLE BUKTI FOLLOW UP (FIXED)
-# =========================
 c.execute("""
 CREATE TABLE IF NOT EXISTS bukti (
     id TEXT,
@@ -64,7 +49,22 @@ CREATE TABLE IF NOT EXISTS bukti (
 conn.commit()
 
 # =========================
-# ROLE SYSTEM
+# LOAD FUNCTIONS (REAL TIME)
+# =========================
+def load_nbh():
+    df = pd.read_sql("SELECT * FROM nbh", conn)
+    if not df.empty:
+        df["case_id"] = df["case_id"].astype(str).str.strip()
+    return df
+
+def load_bukti():
+    df = pd.read_sql("SELECT * FROM bukti", conn)
+    if not df.empty:
+        df["case_id"] = df["case_id"].astype(str).str.strip()
+    return df
+
+# =========================
+# ROLE
 # =========================
 role = st.sidebar.selectbox(
     "Login Role",
@@ -74,21 +74,12 @@ role = st.sidebar.selectbox(
 st.sidebar.divider()
 
 # =========================
-# LOAD DATA
-# =========================
-def load_nbh():
-    return pd.read_sql("SELECT * FROM nbh", conn)
-
-def load_bukti():
-    return pd.read_sql("SELECT * FROM bukti", conn)
-
-df = load_nbh()
-df_bukti = load_bukti()
-
 # =========================
 # ADMIN IC
 # =========================
 if role == "Admin IC":
+
+    df = load_nbh()
 
     st.subheader("📊 Dashboard Admin IC")
 
@@ -119,7 +110,7 @@ if role == "Admin IC":
 
         for _, row in data.iterrows():
 
-            case_id = f"{row['TOKO']}_{row['NO_NRB']}_{row['TGL_NRB']}"
+            case_id = f"{row['TOKO']}_{row['NO_NRB']}_{row['TGL_NRB']}".strip()
 
             c.execute("""
             INSERT INTO nbh VALUES (?,?,?,?,?,?,?,?)
@@ -145,6 +136,9 @@ if role == "Admin IC":
 # TIM UPLOAD IC
 # =========================
 elif role == "Tim Upload IC":
+
+    df = load_nbh()
+    df_bukti = load_bukti()
 
     st.subheader("📷 Upload Bukti Follow Up (WA Screenshot)")
 
@@ -173,7 +167,7 @@ elif role == "Tim Upload IC":
             ) VALUES (?,?,?,?,?,?,?,?,?)
             """, (
                 str(uuid.uuid4()),
-                case,
+                case.strip(),
                 toko_val,
                 nrb_val,
                 catatan,
@@ -184,7 +178,9 @@ elif role == "Tim Upload IC":
             ))
 
             conn.commit()
+
             st.success("✅ Bukti berhasil disimpan")
+            st.rerun()
 
     st.subheader("📌 History Follow Up")
     st.dataframe(df_bukti, use_container_width=True)
@@ -194,6 +190,9 @@ elif role == "Tim Upload IC":
 # TOKO PORTAL
 # =========================
 elif role == "Toko":
+
+    df = load_nbh()
+    df_bukti = load_bukti()
 
     st.subheader("🏪 Portal Toko NBH (Read Only)")
 
@@ -210,8 +209,11 @@ elif role == "Toko":
 
         st.subheader("📷 Bukti Follow Up IC")
 
-        case_list = toko_data["case_id"].unique()
-        bukti_toko = df_bukti[df_bukti["case_id"].isin(case_list)]
+        case_list = [str(x).strip() for x in toko_data["case_id"].unique()]
+
+        bukti_toko = df_bukti[
+            df_bukti["case_id"].astype(str).str.strip().isin(case_list)
+        ]
 
         if bukti_toko.empty:
             st.info("Belum ada bukti follow up")
@@ -222,18 +224,18 @@ elif role == "Toko":
                 st.write(f"📌 Case ID: {row['case_id']}")
                 st.write(f"Status: {row['status']}")
                 st.write(f"Catatan: {row['catatan']}")
-                st.write(f"Tanggal: {row['created_at']}")
+                st.write(f"Timestamp: {row['created_at']}")
 
                 if row["foto"] is not None:
                     try:
                         img = Image.open(BytesIO(row["foto"]))
                         st.image(img, caption="Bukti Follow Up IC", use_container_width=True)
                     except:
-                        st.warning("⚠️ Foto tidak bisa ditampilkan")
+                        st.warning("⚠️ Foto tidak bisa dibuka")
 
                 st.divider()
 
 # =========================
-# CLOSE CONNECTION
+# CLOSE DB
 # =========================
 conn.close()
